@@ -1,0 +1,40 @@
+{
+  "expo": {
+    "name": "TutorsHub",
+    "slug": "tutorshub",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "tutorshub",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "icon": "./assets/images/icon.png",
+    "splash": {
+      "backgroundColor": "#0C4756",
+      "resizeMode": "contain",
+      "image": "./assets/images/logo-full.png"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.tutorshubgh.app",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#FFFFFF"
+      }
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "7be21ab4-8c5f-4a39-93a5-20777d0c227e"
+      }
+    },
+    "owner": "yawmanuel"
+  }
+}
