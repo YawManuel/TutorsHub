@@ -10,11 +10,22 @@ import Chip from '../../components/Chip';
 import StarRating from '../../components/StarRating';
 import SubTabs, { type SubTab } from '../../components/SubTabs';
 import PrimaryButton from '../../components/PrimaryButton';
+import ListState from '../../components/ListState';
 import Toast, { useToast } from '../../components/Toast';
 import { colors, shadows } from '../../theme/tokens';
 import { fonts } from '../../theme/typography';
-import { subjects, tutors, helpTutors } from '../../data/mock';
+import {
+  useDebouncedValue,
+  useHelpTutors,
+  useSubjects,
+  useTutors,
+} from '../../hooks/useCatalog';
+import { useCreateHelpRequest } from '../../hooks/useBookings';
+import { getApiErrorMessage } from '../../services/errors';
 import type { RootStackParamList } from '../../navigation/types';
+
+// Static submission subject until a real subject picker lands.
+const HELP_SUBJECT = 'Mathematics — Algebra';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type TutorTab = 'hub' | 'help';
@@ -28,19 +39,43 @@ export default function TutorsScreen() {
   const navigation = useNavigation<Nav>();
   const [tab, setTab] = useState<TutorTab>('hub');
   const [query, setQuery] = useState('');
-  const [subject, setSubject] = useState('All');
+  const [subject, setSubject] = useState('all'); // subject slug, or 'all'
   const [question, setQuestion] = useState('');
   const [helpTutor, setHelpTutor] = useState('abena');
   const { message, show } = useToast();
 
-  const filtered = tutors.filter((t) => {
-    const bySubject = subject === 'All' || t.subj === subject;
-    const byQuery =
-      !query ||
-      t.name.toLowerCase().includes(query.toLowerCase()) ||
-      t.subj.toLowerCase().includes(query.toLowerCase());
-    return bySubject && byQuery;
+  // Text search is debounced; the subject chip and query both drive the API.
+  const debouncedQuery = useDebouncedValue(query);
+  const subjectsQ = useSubjects();
+  const tutorsQ = useTutors({
+    q: debouncedQuery.trim() || undefined,
+    subject: subject === 'all' ? undefined : subject,
   });
+  const helpQ = useHelpTutors();
+
+  const subjects = subjectsQ.data ?? [];
+  const filtered = tutorsQ.data ?? [];
+  const helpTutors = helpQ.data ?? [];
+
+  const helpRequest = useCreateHelpRequest();
+  const onRequestHelp = () => {
+    if (helpRequest.isPending) return;
+    if (!question.trim()) {
+      show('Describe your question first');
+      return;
+    }
+    helpRequest.mutate(
+      { helpTutorId: helpTutor, subject: HELP_SUBJECT, question: question.trim() },
+      {
+        onSuccess: (req) => {
+          setQuestion('');
+          // Drop straight into the live chat thread for this request.
+          navigation.navigate('HelpChat', { requestId: req.id, tutorName: req.helpTutor.name });
+        },
+        onError: (err) => show(getApiErrorMessage(err)),
+      },
+    );
+  };
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -65,18 +100,23 @@ export default function TutorsScreen() {
             </View>
 
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-              <Chip label="All" active={subject === 'All'} onPress={() => setSubject('All')} />
+              <Chip label="All" active={subject === 'all'} onPress={() => setSubject('all')} />
               {subjects.map((s) => (
-                <Chip key={s.name} label={s.name} active={subject === s.name} onPress={() => setSubject(s.name)} />
+                <Chip key={s.slug} label={s.name} active={subject === s.slug} onPress={() => setSubject(s.slug)} />
               ))}
             </ScrollView>
 
             <View style={styles.tutorList}>
+              <ListState
+                loading={tutorsQ.isLoading}
+                error={tutorsQ.isError}
+                onRetry={() => tutorsQ.refetch()}
+              />
               {filtered.map((t) => (
                 <Pressable
-                  key={t.name}
+                  key={t.id}
                   style={styles.tutorCard}
-                  onPress={() => navigation.navigate('TutorDetail', { tutorName: t.name })}
+                  onPress={() => navigation.navigate('TutorDetail', { tutorId: t.id })}
                 >
                   <View style={[styles.tutorTile, { backgroundColor: t.bg }]}>
                     <Text style={[styles.tutorInitials, { color: t.fg }]}>{t.initials}</Text>
@@ -100,7 +140,7 @@ export default function TutorsScreen() {
                   </View>
                 </Pressable>
               ))}
-              {filtered.length === 0 && (
+              {!tutorsQ.isLoading && !tutorsQ.isError && filtered.length === 0 && (
                 <Text style={styles.empty}>No tutors match your search.</Text>
               )}
             </View>
@@ -118,7 +158,7 @@ export default function TutorsScreen() {
 
             <Text style={styles.formLabel}>SUBMISSION</Text>
             <Pressable style={styles.dropdown} onPress={() => show('Subject picker coming soon')}>
-              <Text style={styles.dropdownText}>Mathematics — Algebra</Text>
+              <Text style={styles.dropdownText}>{HELP_SUBJECT}</Text>
               <Icon name="expand_more" size={22} color="#9AA8A1" />
             </Pressable>
 
@@ -143,6 +183,11 @@ export default function TutorsScreen() {
             </View>
 
             <Text style={styles.formLabel}>CHOOSE A HELP TUTOR</Text>
+            <ListState
+              loading={helpQ.isLoading}
+              error={helpQ.isError}
+              onRetry={() => helpQ.refetch()}
+            />
             <View style={styles.helpList}>
               {helpTutors.map((h) => {
                 const on = helpTutor === h.id;
@@ -170,9 +215,10 @@ export default function TutorsScreen() {
             </View>
 
             <PrimaryButton
-              label="Request help session"
+              label={helpRequest.isPending ? 'Requesting…' : 'Request help session'}
               variant="navy"
-              onPress={() => show('Help session requested ✓')}
+              onPress={onRequestHelp}
+              disabled={helpRequest.isPending}
               height={54}
               style={{ marginTop: 20 }}
             />

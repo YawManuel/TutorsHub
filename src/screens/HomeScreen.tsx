@@ -5,6 +5,7 @@ import {
   ScrollView,
   StyleSheet,
   Alert,
+  Linking,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,16 +14,20 @@ import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 
 import TopBar from '../components/TopBar';
 import Icon from '../components/Icon';
+import Toast, { useToast } from '../components/Toast';
 import { useAuth } from '../context/AuthContext';
-import { colors, radius, shadows, TK_TO_GHS } from '../theme/tokens';
+import { useVideos } from '../hooks/useCatalog';
+import { useNextBooking } from '../hooks/useBookings';
+import { useWallet, useTopup, useWithdraw } from '../hooks/useWallet';
+import { getApiErrorMessage } from '../services/errors';
+import { colors, shadows } from '../theme/tokens';
 import { fonts } from '../theme/typography';
-import {
-  currentUser,
-  homeFeatures,
-  videos,
-  upcomingClass,
-} from '../data/mock';
+import { homeFeatures } from '../data/mock';
 import type { TabParamList } from '../navigation/types';
+
+// Preset amounts keep the flow one-tap until a full amount entry screen lands.
+const TOPUP_AMOUNTS_GHS = [20, 50, 100];
+const WITHDRAW_COINS = [100, 200, 500];
 
 type Nav = BottomTabNavigationProp<TabParamList>;
 
@@ -30,13 +35,65 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<Nav>();
   const { user, signOut } = useAuth();
+  const { data: videos = [] } = useVideos();
+  const { data: nextBooking } = useNextBooking();
+  const { data: wallet } = useWallet();
+  const topup = useTopup();
+  const withdraw = useWithdraw();
+  const { message, show } = useToast();
 
-  // First name for the greeting; coins remain mocked until the wallet (Phase 4).
+  const onJoin = () => {
+    if (nextBooking?.meetingUrl) Linking.openURL(nextBooking.meetingUrl).catch(() => {});
+    else navigation.navigate('Class');
+  };
+
   const firstName = user?.fullName?.split(/\s+/)[0] ?? '';
-  const coinsStr = currentUser.coins.toLocaleString();
-  const coinsGHS = (currentUser.coins * TK_TO_GHS).toLocaleString(undefined, {
+  const coins = wallet?.balance ?? 0;
+  const coinsStr = coins.toLocaleString();
+  const coinsGHS = (wallet?.balanceGhs ?? 0).toLocaleString(undefined, {
     minimumFractionDigits: 2,
   });
+  const busy = topup.isPending || withdraw.isPending;
+
+  const onAddCoins = () => {
+    if (busy) return;
+    Alert.alert('Add TUT Coins', 'Choose an amount to top up.', [
+      ...TOPUP_AMOUNTS_GHS.map((amt) => ({
+        text: `GHS ${amt}`,
+        onPress: () =>
+          topup.mutate(amt, {
+            onSuccess: (r) =>
+              show(
+                r.status === 'success'
+                  ? `Wallet topped up — balance ${r.balance.toLocaleString()} TK ✓`
+                  : 'Payment not completed yet. Try again after paying.',
+              ),
+            onError: (err) => show(getApiErrorMessage(err)),
+          }),
+      })),
+      { text: 'Cancel', style: 'cancel' as const },
+    ]);
+  };
+
+  const onWithdraw = () => {
+    if (busy) return;
+    const options = WITHDRAW_COINS.filter((c) => c <= coins);
+    if (options.length === 0) {
+      show('Not enough coins to withdraw yet.');
+      return;
+    }
+    Alert.alert('Withdraw', 'Choose how many coins to withdraw.', [
+      ...options.map((c) => ({
+        text: `${c.toLocaleString()} TK  ·  GHS ${(c / 2).toFixed(0)}`,
+        onPress: () =>
+          withdraw.mutate(c, {
+            onSuccess: (r) => show(`Withdrawal requested — GHS ${r.withdrawnGhs.toFixed(2)} ✓`),
+            onError: (err) => show(getApiErrorMessage(err)),
+          }),
+      })),
+      { text: 'Cancel', style: 'cancel' as const },
+    ]);
+  };
 
   const onProfile = () => {
     Alert.alert('Account', user?.email ?? '', [
@@ -75,13 +132,25 @@ export default function HomeScreen() {
               </View>
             </View>
             <View style={styles.coinActions}>
-              <Pressable style={[styles.coinBtn, styles.coinBtnGold]}>
+              <Pressable
+                style={[styles.coinBtn, styles.coinBtnGold, busy && styles.coinBtnBusy]}
+                onPress={onAddCoins}
+                disabled={busy}
+              >
                 <Icon name="add" size={19} color={colors.goldTextAlt} />
-                <Text style={styles.coinBtnGoldText}>Add Coins</Text>
+                <Text style={styles.coinBtnGoldText}>
+                  {topup.isPending ? 'Adding…' : 'Add Coins'}
+                </Text>
               </Pressable>
-              <Pressable style={[styles.coinBtn, styles.coinBtnGhost]}>
+              <Pressable
+                style={[styles.coinBtn, styles.coinBtnGhost, busy && styles.coinBtnBusy]}
+                onPress={onWithdraw}
+                disabled={busy}
+              >
                 <Icon name="north_east" size={19} color={colors.white} />
-                <Text style={styles.coinBtnGhostText}>Withdraw</Text>
+                <Text style={styles.coinBtnGhostText}>
+                  {withdraw.isPending ? 'Withdrawing…' : 'Withdraw'}
+                </Text>
               </Pressable>
             </View>
           </LinearGradient>
@@ -106,33 +175,43 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* Upcoming class */}
+        {/* Upcoming session */}
         <View style={styles.block}>
-          <Text style={styles.sectionTitle}>Upcoming class</Text>
-          <LinearGradient
-            colors={['#13234D', '#22356E']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0.6 }}
-            style={styles.upcoming}
-          >
-            <View style={styles.upcomingOrb} />
-            <View style={styles.upcomingAvatar}>
-              <Text style={styles.upcomingAvatarText}>{upcomingClass.initials}</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.upcomingTitle}>{upcomingClass.title}</Text>
-              <View style={styles.upcomingWhen}>
-                <Icon name="schedule" size={16} color={colors.gold} />
-                <Text style={styles.upcomingWhenText}>{upcomingClass.when}</Text>
-              </View>
-            </View>
-            <Pressable
-              style={styles.joinBtn}
-              onPress={() => navigation.navigate('Class')}
+          <Text style={styles.sectionTitle}>Upcoming session</Text>
+          {nextBooking ? (
+            <LinearGradient
+              colors={['#13234D', '#22356E']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0.6 }}
+              style={styles.upcoming}
             >
-              <Text style={styles.joinText}>Join</Text>
+              <View style={styles.upcomingOrb} />
+              <View style={styles.upcomingAvatar}>
+                <Text style={styles.upcomingAvatarText}>{nextBooking.tutor.initials}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.upcomingTitle}>{nextBooking.title}</Text>
+                <View style={styles.upcomingWhen}>
+                  <Icon name="schedule" size={16} color={colors.gold} />
+                  <Text style={styles.upcomingWhenText}>{nextBooking.whenLabel}</Text>
+                </View>
+              </View>
+              <Pressable style={styles.joinBtn} onPress={onJoin}>
+                <Text style={styles.joinText}>Join</Text>
+              </Pressable>
+            </LinearGradient>
+          ) : (
+            <Pressable
+              style={styles.upcomingEmpty}
+              onPress={() => navigation.navigate('Tutors')}
+            >
+              <Icon name="event_available" size={22} color={colors.brand} />
+              <Text style={styles.upcomingEmptyText}>
+                No upcoming sessions yet — book a tutor to get started.
+              </Text>
+              <Icon name="chevron_right" size={22} color={colors.faint} />
             </Pressable>
-          </LinearGradient>
+          )}
         </View>
 
         {/* Watch & learn rail */}
@@ -166,6 +245,8 @@ export default function HomeScreen() {
 
         <View style={{ height: 20 }} />
       </ScrollView>
+
+      <Toast message={message} bottom={90} />
     </View>
   );
 }
@@ -217,6 +298,7 @@ const styles = StyleSheet.create({
   coinBtnGoldText: { fontFamily: fonts.jakartaBold, fontSize: 14, color: colors.goldTextAlt },
   coinBtnGhost: { backgroundColor: 'rgba(255,255,255,0.16)' },
   coinBtnGhostText: { fontFamily: fonts.jakartaBold, fontSize: 14, color: colors.white },
+  coinBtnBusy: { opacity: 0.6 },
 
   // Quick action grid
   grid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 14, gap: 12 },
@@ -261,6 +343,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   upcomingAvatarText: { fontFamily: fonts.jakartaBold, fontSize: 17, color: colors.brand },
+  upcomingEmpty: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: colors.card,
+    borderRadius: 20,
+    padding: 16,
+    marginTop: 13,
+    ...shadows.cardSoft,
+  },
+  upcomingEmptyText: {
+    flex: 1,
+    fontFamily: fonts.nunitoSemibold,
+    fontSize: 13,
+    color: colors.body,
+    lineHeight: 18,
+  },
   upcomingTitle: { fontFamily: fonts.jakartaBold, fontSize: 16, color: colors.white },
   upcomingWhen: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
   upcomingWhenText: { fontFamily: fonts.nunitoSemibold, fontSize: 13, color: 'rgba(255,255,255,0.8)' },

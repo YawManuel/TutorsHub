@@ -7,10 +7,15 @@ import Icon from '../components/Icon';
 import Chip from '../components/Chip';
 import SubTabs, { type SubTab } from '../components/SubTabs';
 import AvatarStack from '../components/AvatarStack';
+import ListState from '../components/ListState';
 import Toast, { useToast } from '../components/Toast';
 import { colors, shadows } from '../theme/tokens';
 import { fonts } from '../theme/typography';
-import { classes, classFilters, practiceSets, videos } from '../data/mock';
+import { classFilters } from '../data/mock';
+import { useClasses, usePracticeSets, useVideos } from '../hooks/useCatalog';
+import { useEnrollClass, useMyClasses } from '../hooks/useBookings';
+import { getApiErrorMessage } from '../services/errors';
+import type { ClassItem } from '../services/catalogApi';
 
 type ClassTab = 'classes' | 'practice' | 'tutorials';
 const TABS: SubTab<ClassTab>[] = [
@@ -24,6 +29,27 @@ export default function ClassScreen() {
   const [tab, setTab] = useState<ClassTab>('classes');
   const [filter, setFilter] = useState(classFilters[0]);
   const { message, show } = useToast();
+
+  const showMine = filter === 'My classes';
+  const classesQ = useClasses();
+  const myClassesQ = useMyClasses(showMine);
+  const practiceQ = usePracticeSets();
+  const videosQ = useVideos();
+  const enroll = useEnrollClass();
+
+  const classListQ = showMine ? myClassesQ : classesQ;
+  const displayedClasses = classListQ.data ?? [];
+  const practiceSets = practiceQ.data ?? [];
+  const videos = videosQ.data ?? [];
+
+  const onEnroll = (c: ClassItem) => {
+    if (enroll.isPending) return;
+    enroll.mutate(c.id, {
+      onSuccess: (r) =>
+        show(r.alreadyEnrolled ? `You’re already in ${c.title}` : `Joined ${c.title} ✓`),
+      onError: (err) => show(getApiErrorMessage(err)),
+    });
+  };
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -46,12 +72,24 @@ export default function ClassScreen() {
               ))}
             </ScrollView>
 
+            <ListState
+              loading={classListQ.isLoading}
+              error={classListQ.isError}
+              onRetry={() => classListQ.refetch()}
+            />
+
+            {showMine && !classListQ.isLoading && !classListQ.isError && displayedClasses.length === 0 && (
+              <Text style={styles.emptyClasses}>
+                You haven’t joined any classes yet.
+              </Text>
+            )}
+
             <View style={styles.classList}>
-              {classes.map((c) => (
+              {displayedClasses.map((c) => (
                 <Pressable
-                  key={c.title}
+                  key={c.id}
                   style={[styles.classCard, { backgroundColor: c.tint }]}
-                  onPress={() => show(`Joining ${c.title} class…`)}
+                  onPress={() => onEnroll(c)}
                 >
                   <View style={styles.classTop}>
                     <View style={{ flex: 1 }}>
@@ -103,10 +141,16 @@ export default function ClassScreen() {
               <Icon name="expand_more" size={24} color={colors.faint} />
             </View>
 
+            <ListState
+              loading={practiceQ.isLoading}
+              error={practiceQ.isError}
+              onRetry={() => practiceQ.refetch()}
+            />
+
             <View style={styles.practiceGrid}>
               {practiceSets.map((ps) => (
                 <Pressable
-                  key={ps.name}
+                  key={ps.id}
                   style={styles.practiceCard}
                   onPress={() => show(`${ps.name} — coming soon`)}
                 >
@@ -123,9 +167,14 @@ export default function ClassScreen() {
 
         {tab === 'tutorials' && (
           <View style={styles.tutorialList}>
+            <ListState
+              loading={videosQ.isLoading}
+              error={videosQ.isError}
+              onRetry={() => videosQ.refetch()}
+            />
             {videos.map((v) => (
               <Pressable
-                key={v.title}
+                key={v.id}
                 style={styles.tutorialCard}
                 onPress={() => show(`Opening “${v.title}”…`)}
               >
@@ -162,6 +211,13 @@ const styles = StyleSheet.create({
   chips: { gap: 9, marginTop: 16, paddingBottom: 3, paddingRight: 22 },
 
   // Class cards
+  emptyClasses: {
+    fontFamily: fonts.nunitoSemibold,
+    fontSize: 14,
+    color: colors.muted,
+    textAlign: 'center',
+    paddingVertical: 26,
+  },
   classList: { gap: 16, marginTop: 18 },
   classCard: { borderRadius: 24, padding: 18, ...shadows.card },
   classTop: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },

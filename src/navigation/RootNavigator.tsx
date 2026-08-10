@@ -8,7 +8,10 @@ import PackageScreen from '../screens/onboarding/PackageScreen';
 import CreateAccountScreen from '../screens/onboarding/CreateAccountScreen';
 import TabNavigator from './TabNavigator';
 import TutorDetailScreen from '../screens/tutors/TutorDetailScreen';
+import HelpChatScreen from '../screens/tutors/HelpChatScreen';
+import NotificationsScreen from '../screens/NotificationsScreen';
 import { useAuth } from '../context/AuthContext';
+import { useNotificationsSync } from '../hooks/useNotifications';
 import { colors } from '../theme/tokens';
 import type { RootStackParamList } from './types';
 
@@ -19,6 +22,8 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 // Switching between the two happens automatically as auth status changes.
 export default function RootNavigator() {
   const { status } = useAuth();
+  // App-wide live notification badge/feed sync (no-op until signed in).
+  useNotificationsSync();
 
   if (status === 'loading') {
     return (
@@ -34,6 +39,8 @@ export default function RootNavigator() {
         <>
           <Stack.Screen name="Main" component={TabNavigator} />
           <Stack.Screen name="TutorDetail" component={TutorDetailScreen} />
+          <Stack.Screen name="HelpChat" component={HelpChatScreen} />
+          <Stack.Screen name="Notifications" component={NotificationsScreen} />
         </>
       ) : (
         <>

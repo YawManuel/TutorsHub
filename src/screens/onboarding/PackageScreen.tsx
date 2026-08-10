@@ -6,9 +6,10 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import Icon from '../../components/Icon';
 import BackButton from '../../components/BackButton';
 import PrimaryButton from '../../components/PrimaryButton';
+import ListState from '../../components/ListState';
 import { colors } from '../../theme/tokens';
 import { fonts } from '../../theme/typography';
-import { packages } from '../../data/mock';
+import { usePackages } from '../../hooks/useCatalog';
 import type { RootStackParamList } from '../../navigation/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Package'>;
@@ -17,6 +18,7 @@ export default function PackageScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
   const [selected, setSelected] = useState<string>('combo');
   const role = route.params?.role ?? 'student';
+  const { data: packages = [], isLoading, isError, refetch } = usePackages();
 
   return (
     <View style={[styles.root, { paddingTop: insets.top + 8 }]}>
@@ -27,6 +29,8 @@ export default function PackageScreen({ navigation, route }: Props) {
         <BackButton onPress={() => navigation.goBack()} />
         <Text style={styles.title}>Choose your plan</Text>
         <Text style={styles.sub}>Billed monthly in GHS. Cancel anytime.</Text>
+
+        <ListState loading={isLoading} error={isError} onRetry={() => refetch()} />
 
         <View style={styles.list}>
           {packages.map((p) => {

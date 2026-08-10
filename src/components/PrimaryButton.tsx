@@ -13,6 +13,7 @@ type PrimaryButtonProps = {
   icon?: string;
   height?: number;
   style?: StyleProp<ViewStyle>;
+  disabled?: boolean;
 };
 
 const VARIANTS: Record<
@@ -32,16 +33,19 @@ export default function PrimaryButton({
   icon,
   height = 56,
   style,
+  disabled = false,
 }: PrimaryButtonProps) {
   const v = VARIANTS[variant];
   return (
     <Pressable
       onPress={onPress}
+      disabled={disabled}
       style={({ pressed }) => [
         styles.base,
         { height, backgroundColor: v.bg, borderColor: v.border ?? 'transparent' },
         v.border ? styles.bordered : v.shadow,
         pressed && styles.pressed,
+        disabled && styles.disabled,
         style,
       ]}
     >
@@ -62,5 +66,6 @@ const styles = StyleSheet.create({
   },
   bordered: { borderWidth: 1.5 },
   pressed: { opacity: 0.9, transform: [{ scale: 0.99 }] },
+  disabled: { opacity: 0.55 },
   label: { fontFamily: fonts.jakartaBold, fontSize: 17 },
 });

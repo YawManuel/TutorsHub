@@ -24,7 +24,9 @@ export type RootStackParamList = {
   Package: { role: RoleSlug } | undefined;
   CreateAccount: { role: RoleSlug } | undefined;
   Main: NavigatorScreenParams<TabParamList> | undefined;
-  TutorDetail: { tutorName: string };
+  TutorDetail: { tutorId: string };
+  HelpChat: { requestId: string; tutorName: string };
+  Notifications: undefined;
 };
 
 declare global {
