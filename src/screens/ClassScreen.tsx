@@ -1,6 +1,8 @@
 import { useState } from 'react';
-import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, Pressable, ScrollView, Modal, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import TopBar from '../components/TopBar';
 import Icon from '../components/Icon';
@@ -15,7 +17,9 @@ import { classFilters } from '../data/mock';
 import { useClasses, usePracticeSets, useVideos } from '../hooks/useCatalog';
 import { useEnrollClass, useMyClasses } from '../hooks/useBookings';
 import { getApiErrorMessage } from '../services/errors';
+import { GRADE_LEVELS, gradeLabel } from '../services/questionsApi';
 import type { ClassItem } from '../services/catalogApi';
+import type { RootStackParamList } from '../navigation/types';
 
 type ClassTab = 'classes' | 'practice' | 'tutorials';
 const TABS: SubTab<ClassTab>[] = [
@@ -26,8 +30,11 @@ const TABS: SubTab<ClassTab>[] = [
 
 export default function ClassScreen() {
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [tab, setTab] = useState<ClassTab>('classes');
   const [filter, setFilter] = useState(classFilters[0]);
+  const [grade, setGrade] = useState('grade4');
+  const [gradeModal, setGradeModal] = useState(false);
   const { message, show } = useToast();
 
   const showMine = filter === 'My classes';
@@ -141,6 +148,19 @@ export default function ClassScreen() {
               <Icon name="expand_more" size={24} color={colors.faint} />
             </View>
 
+            <Pressable style={styles.gradeSelector} onPress={() => setGradeModal(true)}>
+              <View style={styles.subjectLeft}>
+                <View style={styles.gradeTile}>
+                  <Icon name="school" size={22} color={colors.success} />
+                </View>
+                <View>
+                  <Text style={styles.subjectLabel}>GRADE LEVEL</Text>
+                  <Text style={styles.subjectName}>{gradeLabel(grade)}</Text>
+                </View>
+              </View>
+              <Icon name="expand_more" size={24} color={colors.faint} />
+            </Pressable>
+
             <ListState
               loading={practiceQ.isLoading}
               error={practiceQ.isError}
@@ -152,7 +172,15 @@ export default function ClassScreen() {
                 <Pressable
                   key={ps.id}
                   style={styles.practiceCard}
-                  onPress={() => show(`${ps.name} — coming soon`)}
+                  onPress={() =>
+                    navigation.navigate('Practice', {
+                      grade,
+                      gradeLabel: gradeLabel(grade),
+                      subject: 'mathematics',
+                      setSlug: ps.slug,
+                      setName: ps.name,
+                    })
+                  }
                 >
                   <View style={[styles.practiceTile, { backgroundColor: ps.tint }]}>
                     <Icon name={ps.icon} size={24} color={ps.fg} />
@@ -198,6 +226,40 @@ export default function ClassScreen() {
 
         <View style={{ height: 20 }} />
       </ScrollView>
+
+      <Modal
+        visible={gradeModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setGradeModal(false)}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={() => setGradeModal(false)}>
+          <Pressable style={styles.modalSheet}>
+            <Text style={styles.modalTitle}>Choose grade level</Text>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {GRADE_LEVELS.map((g) => {
+                const active = g.value === grade;
+                return (
+                  <Pressable
+                    key={g.value}
+                    style={[styles.gradeRow, active && styles.gradeRowActive]}
+                    onPress={() => {
+                      setGrade(g.value);
+                      setGradeModal(false);
+                    }}
+                  >
+                    <Text style={[styles.gradeRowText, active && styles.gradeRowTextActive]}>
+                      {g.label}
+                    </Text>
+                    {active && <Icon name="check" size={20} color={colors.brand} />}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       <Toast message={message} />
     </View>
   );
@@ -280,6 +342,25 @@ const styles = StyleSheet.create({
   },
   subjectLabel: { fontFamily: fonts.nunitoBold, fontSize: 11, color: colors.muted },
   subjectName: { fontFamily: fonts.jakartaBold, fontSize: 15, color: colors.ink },
+  gradeSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginTop: 12,
+    ...shadows.cardSoft,
+  },
+  gradeTile: {
+    width: 40,
+    height: 40,
+    borderRadius: 13,
+    backgroundColor: '#E7F4EE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   practiceGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 16 },
   practiceCard: {
     width: '47%',
@@ -292,6 +373,34 @@ const styles = StyleSheet.create({
   practiceTile: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   practiceName: { fontFamily: fonts.jakartaBold, fontSize: 15, color: colors.ink, marginTop: 11 },
   practiceCount: { fontFamily: fonts.nunitoSemibold, fontSize: 12, color: colors.muted, marginTop: 2 },
+
+  // Grade picker modal
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(11,30,82,0.35)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: colors.card,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 22,
+    paddingTop: 22,
+    paddingBottom: 34,
+    maxHeight: '70%',
+  },
+  modalTitle: { fontFamily: fonts.jakartaBold, fontSize: 18, color: colors.ink, marginBottom: 12 },
+  gradeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 15,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+  },
+  gradeRowActive: { backgroundColor: '#EEF3FC' },
+  gradeRowText: { fontFamily: fonts.nunitoSemibold, fontSize: 16, color: colors.body },
+  gradeRowTextActive: { fontFamily: fonts.jakartaBold, color: colors.brand },
 
   // Tutorials
   tutorialList: { gap: 14, marginTop: 18 },

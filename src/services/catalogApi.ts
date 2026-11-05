@@ -68,6 +68,7 @@ export interface Video {
 
 export interface PracticeSet {
   id: string;
+  slug: string;
   name: string;
   count: string;
   icon: string;

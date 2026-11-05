@@ -10,6 +10,7 @@ import TabNavigator from './TabNavigator';
 import TutorDetailScreen from '../screens/tutors/TutorDetailScreen';
 import HelpChatScreen from '../screens/tutors/HelpChatScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
+import QuizScreen from '../screens/QuizScreen';
 import { useAuth } from '../context/AuthContext';
 import { useNotificationsSync } from '../hooks/useNotifications';
 import { colors } from '../theme/tokens';
@@ -41,6 +42,7 @@ export default function RootNavigator() {
           <Stack.Screen name="TutorDetail" component={TutorDetailScreen} />
           <Stack.Screen name="HelpChat" component={HelpChatScreen} />
           <Stack.Screen name="Notifications" component={NotificationsScreen} />
+          <Stack.Screen name="Practice" component={QuizScreen} />
         </>
       ) : (
         <>

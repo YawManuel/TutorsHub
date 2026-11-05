@@ -1,88 +1,133 @@
-# TutorsHub — Mobile App (Expo / React Native + TypeScript)
+# TutorsHub — Mobile App
 
-Implementation of the TutorsHub design handoff (`../design_handoff_tutorshub_app`).
-Ghana-localized learning app: live tutoring, practice, challenges, study groups,
-and an in-app TUT Coin (TK) currency.
+Expo / React Native (TypeScript) client for **TutorsHub**, a Ghana-focused
+tutoring marketplace: live tutoring, on-demand help, practice, subscriptions,
+and an in-app **TUT Coin (TK)** wallet. Talks to the API in the sibling
+[`TutorsHub-backend`](https://github.com/YawManuel/TutorsHub-backend) repo.
 
-## Status
+**Stack:** Expo ~52 · React Native 0.76 · React 18.3 · TypeScript (strict) ·
+React Navigation v7 · TanStack Query · axios · expo-secure-store.
 
-Built so far:
+**Status:** onboarding + all screens wired to the live API (Phases 2–7).
 
-- **Onboarding flow** — Welcome → Role → Plan → Create account
-- **Home** — greeting, TUT Coin balance card, quick-action grid, upcoming class, "Watch & learn" rail
-- **Class tab** — sub-tabs Class / Practice / Tutorials (filter chips + class cards with
-  avatar stacks & LIVE badges; subject selector + practice-set grid; tutorial video list)
-- **Tutors tab** — sub-tabs Hub Tutor / Help Tutor (search + subject filter + tutor cards;
-  help-request form with tutor picker), and **Tutor detail** (blue header, stats, about,
-  sticky "Book session" footer)
-- **Bottom tab shell** — Home · Class · Tutors · Compete · Group (Compete & Group are
-  placeholders wired for navigation)
+---
 
-Leaf actions that lead to not-yet-built screens (join a live class, open a tutorial/practice
-set, book a session, request help) surface a toast for now.
-
-Remaining screens from the handoff (Live session, Practice/Quiz, Compete, Groups, Videos,
-Wallet, Payment, Profiles, Become-a-tutor) are next.
-
-## Requirements
-
-- Node 18–20 recommended (works on newer, but Expo SDK 52 targets LTS)
-- `npx expo` (installed as a dependency; no global install needed)
-
-## Run
+## Quick start
 
 ```bash
-cd "TutorsHub mobile app screens/TutorsHubApp"
-npm install          # if not already installed
-npm start            # Expo dev server (press i / a, or scan QR in Expo Go)
-npm run ios          # iOS simulator
-npm run android      # Android emulator
-npm run web          # web preview
-npm run typecheck    # tsc --noEmit
+npm install
+# Point the app at your backend (see below). Defaults work for a local backend:
+export EXPO_PUBLIC_API_URL=http://localhost:4000
+npx expo start
 ```
 
-## Architecture
+Then press `a` (Android), `i` (iOS), or scan the QR with Expo Go.
+
+### Running with the backend
+
+The backend runs with zero database setup:
+
+```bash
+# in ../TutorsHub-backend
+npm install && npm run dev:mem     # API on http://localhost:4000
+```
+
+Set `EXPO_PUBLIC_API_URL` to reach it. If unset, the app falls back to:
+- **Android emulator:** `http://10.0.2.2:4000` (host machine)
+- **iOS simulator / web:** `http://localhost:4000`
+- **Physical device:** set `EXPO_PUBLIC_API_URL=http://<your-LAN-IP>:4000`
+
+Sign up in the app, then book a tutor, top up the wallet, request help (opens a
+live chat), and watch the notification bell update in real time.
+
+---
+
+## Scripts
+
+| Command | Purpose |
+| --- | --- |
+| `npx expo start` | Start the Metro dev server |
+| `npx tsc --noEmit` | Type-check (strict) |
+
+---
+
+## How it's wired
+
+Screens never call `axios` directly. Data flows through three layers:
 
 ```
-App.tsx                     Font loading, NavigationContainer, providers
-index.js                    Expo entry
+src/services/*Api.ts     typed fetchers over the shared axios instance (apiClient)
+src/hooks/use*.ts        TanStack Query hooks (queries + mutations, cache keys)
+src/screens/**           consume the hooks; render loading/error via <ListState/>
+```
+
+- **`services/apiClient.ts`** — the axios instance: attaches the JWT, and on a
+  401 transparently refreshes the token (single-flight) and retries.
+- **Auth** lives in `context/AuthContext.tsx`; tokens are persisted in
+  `expo-secure-store` (`services/tokenStore.ts`).
+- **Real-time** (help chat + notification badge) uses SSE over an
+  XHR-based client (`services/sseClient.ts`) — no extra dependency.
+
+> **TS note:** hooks annotate their return type explicitly
+> (`UseQueryResult<T>` / `UseMutationResult<…>`). Expo's base tsconfig sets
+> `moduleResolution: node`, under which react-query v5's generic inference
+> otherwise collapses `data` to `any`. Keep the annotations.
+
+---
+
+## Project structure
+
+```
 src/
-  theme/
-    tokens.ts               Colors, tints, radius, spacing, shadows (from handoff)
-    typography.ts           Plus Jakarta Sans + Nunito font map/names
-  data/mock.ts              Static data transcribed from the prototype arrays
-  navigation/
-    types.ts                Typed route params (RootStack + Tabs)
-    RootNavigator.tsx       Onboarding stack -> Main tabs -> TutorDetail
-    TabNavigator.tsx        5-tab bottom bar (custom tab bar)
-  components/
-    Icon.tsx                Material Symbols -> MaterialIcons glyph mapping
-    PrimaryButton.tsx       Blue / gold / navy / ghost button
-    BackButton.tsx          Rounded back button
-    TopBar.tsx              Logo + notifications + avatar
-    SubTabs.tsx             Underline sub-tab bar
-    Chip.tsx                Pill filter chip
-    StarRating.tsx          Five-star rating row
-    AvatarStack.tsx         Overlapping participant photos + count
-    Toast.tsx               Transient bottom pill + useToast() hook
-  screens/
-    onboarding/             Welcome, Role, Package, CreateAccount
-    HomeScreen.tsx
-    ClassScreen.tsx         Class / Practice / Tutorials sub-tabs
-    tutors/
-      TutorsScreen.tsx      Hub Tutor / Help Tutor sub-tabs
-      TutorDetailScreen.tsx Tutor profile + book session
-    PlaceholderScreen.tsx   Stub for Compete/Group
-assets/images/              Logo, onboarding student, class avatars
+  components/   shared UI (Icon, PrimaryButton, ListState, Toast, TopBar…)
+  config/       env (EXPO_PUBLIC_API_URL resolution)
+  context/      AuthContext (session state + sign in/out)
+  hooks/        useCatalog, useBookings, useWallet, useReviews,
+                useHelpChat, useNotifications
+  navigation/   RootNavigator (auth-gated) + TabNavigator + route types
+  screens/      onboarding/, tutors/, Home, Class, Notifications, …
+  services/     apiClient + per-feature *Api + sseClient + push + tokenStore
+  theme/        design tokens + typography
 ```
 
-## Design fidelity notes
+---
 
-- **Tokens** in `src/theme/tokens.ts` are transcribed 1:1 from the handoff. Keep exact.
-- **Fonts:** headings/labels use Plus Jakarta Sans; body uses Nunito (via `@expo-google-fonts`).
-- **Icons:** the prototype uses Material Symbols Rounded; here we map the same glyph
-  names to `@expo/vector-icons` MaterialIcons (`src/components/Icon.tsx`). MaterialIcons
-  has no fill-variant toggle, so active/inactive states differ by color only.
-- **Shadows:** CSS blur/spread are approximated with RN `shadow*` / `elevation`.
-- **Currency:** 1 point = 20 TK; 1 TK = GHS 0.50 (`TK_TO_GHS` in tokens).
-```
+## Features (by backend phase)
+
+- **Auth** — email/password signup & login, token refresh, auth-gated nav.
+- **Catalog** — tutors (search + subject filter), classes, packages, videos,
+  practice sets, help tutors.
+- **Bookings** — book a tutor, Home “upcoming session” card, class enrollment
+  + “My classes”.
+- **Wallet & payments** — real TUT Coin balance, Add Coins (Paystack top-up),
+  Withdraw.
+- **Reviews & uploads** — rate a session (20–100 pts) on the tutor page.
+- **Real-time help chat** — request help → live SSE thread with presence.
+- **Notifications** — live unread badge on the bell + notifications feed.
+
+---
+
+## Documented seams (need a native module / config to finish)
+
+These are wired up to the point the missing piece allows; the backend side is
+ready for each:
+
+- **Google sign-in** — button shows a placeholder; needs Google client IDs +
+  `expo-auth-session` (backend `/auth/google` is ready).
+- **Push registration** — `services/push.ts` no-ops until `expo-notifications`
+  is added; the token-registration endpoint is ready.
+- **Help-request file attachments** — the upload API + pipeline are ready;
+  wiring the “Attach assignment” dropzone needs `expo-document-picker`.
+- **Authed subscription purchase** — the onboarding plan screen is pre-auth
+  (selection only); the subscribe API + `useSubscribe` hook await a post-signup
+  plan screen.
+
+---
+
+## Configuration
+
+Only one env var, read at build time by Expo:
+
+| Var | Purpose | Default |
+| --- | --- | --- |
+| `EXPO_PUBLIC_API_URL` | Backend base URL | per-platform localhost (see above) |

@@ -27,6 +27,13 @@ export type RootStackParamList = {
   TutorDetail: { tutorId: string };
   HelpChat: { requestId: string; tutorName: string };
   Notifications: undefined;
+  Practice: {
+    grade: string;
+    gradeLabel: string;
+    subject: string;
+    setSlug: string;
+    setName: string;
+  };
 };
 
 declare global {
