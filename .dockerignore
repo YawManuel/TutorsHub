@@ -1,0 +1,17 @@
+# Keep the build context small and free of local state/secrets.
+.git
+.gitignore
+node_modules
+.expo
+dist
+web-build
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+
+# Docker's own files
+Dockerfile
+.dockerignore
+docker-compose.yml

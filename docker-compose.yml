@@ -1,0 +1,36 @@
+# Pick a profile:
+#   docker compose --profile dev up --build    Metro with live reload
+#   docker compose --profile web up --build    production web build on nginx
+# Settings are read from .env (see .env.example).
+
+services:
+  dev:
+    profiles: [dev]
+    build:
+      context: .
+      target: dev
+    environment:
+      EXPO_PUBLIC_API_URL: ${EXPO_PUBLIC_API_URL:-http://localhost:4000}
+      # The address Expo advertises in its QR code. Without this it would be the
+      # container's private IP, which a phone can't reach.
+      REACT_NATIVE_PACKAGER_HOSTNAME: ${REACT_NATIVE_PACKAGER_HOSTNAME:-localhost}
+    ports:
+      - "${METRO_PORT:-8081}:8081"
+    volumes:
+      - .:/app
+      # Keep the image's Linux deps and Metro state out of the host checkout.
+      - /app/node_modules
+      - /app/.expo
+    stdin_open: true
+    tty: true
+
+  web:
+    profiles: [web]
+    build:
+      context: .
+      target: web
+      args:
+        EXPO_PUBLIC_API_URL: ${EXPO_PUBLIC_API_URL:-http://localhost:4000}
+    ports:
+      - "${WEB_PORT:-8088}:8080"
+    restart: unless-stopped

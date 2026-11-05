@@ -42,6 +42,28 @@ live chat), and watch the notification bell update in real time.
 
 ---
 
+## Docker
+
+Two targets, selected with a compose profile. Settings come from `.env`
+(`cp .env.example .env`).
+
+```bash
+docker compose --profile dev up --build   # Metro with live reload on :8081
+docker compose --profile web up --build   # production web build on :8088
+```
+
+- **`dev`** bind-mounts the source, so edits reload as usual. To use Expo Go on a
+  phone, set `REACT_NATIVE_PACKAGER_HOSTNAME` to your machine's LAN IP.
+- **`web`** is a static export on nginx. `EXPO_PUBLIC_API_URL` is inlined into the
+  bundle at build time, so changing it needs `--build`. If the backend sets
+  `CORS_ORIGINS`, add this site's origin to it.
+- `EXPO_PUBLIC_API_URL` must be reachable from the browser or phone, not from the
+  container. `dev` mode's phone setup needs your LAN IP here too.
+
+Native iOS/Android builds aren't containerized — use EAS (`eas.json`).
+
+---
+
 ## Scripts
 
 | Command | Purpose |
